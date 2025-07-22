@@ -1,8 +1,10 @@
 use std::fs::File;
 use std::io::{self, Read, Write};
+use std::net::TcpStream;
 use std::path::Path;
 
 use clap::Parser;
+use ssh2::Session;
 use walkdir::WalkDir;
 use zip::write::FileOptions;
 
@@ -55,6 +57,36 @@ fn compress_folder_to_zip(folder_path: &str, output_zip: &str) -> io::Result<()>
         }
     }
     zip.finish()?;
+
+    Ok(())
+}
+
+fn upload_via_sftp(
+    ip: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+    local_zip: &str,
+    remote_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let tcp = TcpStream::connect(format!("{}:{}", ip, port))?;
+    let mut session = Session::new()?;
+    session.set_tcp_stream(tcp);
+    session.handshake()?;
+
+    session.userauth_password(username, password)?;
+    assert!(session.authenticated());
+
+    let sftp = session.sftp()?;
+
+    let mut file = File::open(local_zip)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    let mut remote_file = sftp.create(Path::new(remote_path))?;
+    remote_file.write_all(&buffer)?;
+
+    println!("File uploaded successfully to ({}) {}", ip, remote_path);
     Ok(())
 }
 
@@ -63,15 +95,28 @@ fn main() {
     let input_path = &args.path;
     let output_path = format!("{}.zip", input_path);
 
+    let ip = "192.168.1.109";
+    let port = 22;
+    let username = "amax";
+    let password = "Haichuang";
+    let remote_path = format!("/home/{}/{}", username, output_path);
+
     if Path::new(input_path).is_file() {
         compress_file_to_zip(input_path, &output_path).expect("Failed to compress file");
         println!("Compressed file saved to: {}", output_path);
     } else if Path::new(input_path).is_dir() {
-        let output_dir = format!("{}.gz", input_path);
+        let output_dir = format!("{}.zip", input_path);
         std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
         compress_folder_to_zip(input_path, &output_dir).expect("Failed to compress folder");
         println!("Compressed folder saved to: {}", output_dir);
     } else {
         println!("Invalid path: {}", input_path);
+    }
+
+    if Path::new(&output_path).exists() {
+        upload_via_sftp(ip, port, username, password, &output_path, &remote_path)
+            .expect("Failed to upload file");
+    } else {
+        println!("Local file does not exist: {}", output_path);
     }
 }
