@@ -2,8 +2,8 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 use walkdir::WalkDir;
+use zip::write::SimpleFileOptions;
 use zip::CompressionMethod;
-use zip::write::FileOptions;
 
 pub fn compress_file_to_zip(input_path: &str, output_path: &str) -> io::Result<()> {
     let path = Path::new(input_path);
@@ -17,7 +17,7 @@ pub fn compress_file_to_zip(input_path: &str, output_path: &str) -> io::Result<(
     let file_name = path.file_name().unwrap().to_string_lossy();
     zip.start_file(
         file_name,
-        FileOptions::default().compression_method(CompressionMethod::Deflated),
+        SimpleFileOptions::default().compression_method(CompressionMethod::Deflated),
     )?;
     zip.write_all(&buffer)?;
     zip.finish()?;
@@ -43,14 +43,14 @@ pub fn compress_folder_to_zip(folder_path: &str, output_zip: &str) -> io::Result
 
             zip.start_file(
                 name.to_string_lossy(),
-                FileOptions::default().compression_method(CompressionMethod::Deflated),
+                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated),
             )?;
             zip.write_all(&buffer)?;
         } else if path.is_dir() {
             let dir_name = format!("{}/", name.to_string_lossy());
             zip.add_directory(
                 dir_name,
-                FileOptions::default().compression_method(CompressionMethod::Deflated),
+                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated),
             )?;
         }
     }

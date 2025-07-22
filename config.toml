@@ -1,0 +1,16 @@
+[servers.example]
+name = "Example Server"
+ip = "192.168.1.100"
+username = "example"
+port = 22
+remote_path = "/home/example/uploads"
+
+[servers.home]
+name = "Home Server"
+ip = "192.168.1.100"
+username = "admin"
+port = 22
+remote_path = "/home/admin"
+
+[default]
+server = 'example'

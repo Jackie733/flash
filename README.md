@@ -6,10 +6,12 @@ A command-line tool for compressing files/folders and uploading them to remote s
 
 - 🗜️ **File & Folder Compression**: Compress individual files or entire directories into ZIP format
 - 🚀 **SFTP Upload**: Secure file transfer to remote servers with progress bars
+- ⚙️ **Configuration File Support**: Save multiple server configurations for easy reuse
 - 🔒 **Secure Input**: Safe password input without echo
 - 📊 **Progress Tracking**: Visual progress bars for upload operations
 - 🌐 **IP Validation**: Built-in validation for IPv4 and IPv6 addresses
 - 🔍 **Comprehensive Logging**: Detailed logging with configurable levels
+- 🎯 **Interactive Server Selection**: Choose from configured servers or input manually
 
 ## Installation
 
@@ -49,30 +51,67 @@ cargo install --path .
 
 ## Usage
 
+### Configuration Setup (Recommended)
+
+First, initialize a configuration file to save your server settings:
+
+```bash
+# Create configuration file
+flash --init-config
+```
+
+This creates a config file at `~/.config/flash/config.toml` (or `./flash.toml` in current directory) with example servers:
+
+```toml
+# Flash configuration file
+[servers.home]
+name = "Home Server"
+ip = "192.168.1.100"
+username = "admin"
+port = 22
+remote_path = "/home/admin"
+
+[servers.work]
+name = "Work Server"
+ip = "10.0.0.5"
+username = "deploy"
+port = 2222
+remote_path = "/opt/uploads"
+
+[default]
+server = "home"  # Default server to use
+```
+
 ### Basic Usage
 
 ```bash
-# Compress and upload a file
+# Using configured servers
+flash --path /path/to/file.txt --server work
+flash --path /path/to/file.txt --server home
+
+# Interactive server selection (will show available servers)
+flash --path /path/to/file.txt
+
+# Manual input (traditional way, still supported)
 flash --path /path/to/file.txt --ip 192.168.1.100 --username user --password pass
 
 # Compress and upload a directory
-flash --path /path/to/directory --ip 192.168.1.100 --username user
-
-# Interactive mode (prompts for missing information)
-flash --path /path/to/file.txt
+flash --path /path/to/directory --server work
 ```
 
 ### Command Line Options
 
-```
+```text
 USAGE:
-    flash [OPTIONS] --path <PATH>
+    flash [OPTIONS]
 
 OPTIONS:
     -p, --path <PATH>         Path to file or directory to compress and upload
         --ip <IP>            Server IP address (IPv4 or IPv6)
         --username <USERNAME> SSH username
         --password <PASSWORD> SSH password (will prompt if not provided)
+        --server <SERVER>     Use a configured server from config file
+        --init-config         Create example configuration file
     -h, --help               Print help information
     -V, --version            Print version information
 ```
@@ -87,27 +126,83 @@ flash --path /path/to/file.txt
 
 ## Examples
 
-### Example 1: Upload a File
+### Example 1: First Time Setup
 
 ```bash
-flash --path ~/documents/report.pdf --ip 192.168.1.100 --username admin
-# Will prompt for password securely
+# Initialize configuration
+flash --init-config
+
+# Edit the config file to add your servers
+# File location: ~/.config/flash/config.toml
+
+# Use configured server
+flash --path ~/documents/report.pdf --server home
 ```
 
-### Example 2: Upload a Directory
+### Example 2: Using Different Servers
 
 ```bash
+# Use work server
+flash --path ~/projects/my-app --server work
+
+# Use home server with interactive confirmation
+flash --path ~/backup.tar
+```
+
+### Example 3: Traditional Manual Input
+
+```bash
+# Manual server input (no config needed)
+flash --path ~/documents/report.pdf --ip 192.168.1.100 --username admin
+# Will prompt for password securely
+
+# Full manual specification
 flash --path ~/projects/my-app --ip 10.0.0.5 --username deploy --password mypass
 ```
 
-### Example 3: Interactive Mode
+### Example 4: Interactive Mode
+
+````bash
+flash --path ~/backup.tar
+# Will show:
+# 1. Available configured servers to choose from
+# 2. Option to input server details manually
+# 3. Secure password prompt
+```## Configuration
+
+### Configuration File Locations
+
+Flash looks for configuration files in the following order:
+1. `./flash.toml` (current directory)
+2. `~/.config/flash/config.toml` (user config directory)
+
+### Configuration Format
+
+```toml
+# Multiple server configurations
+[servers.server_name]
+name = "Display Name"
+ip = "server.ip.address"
+username = "your_username"
+port = 22                    # Optional, defaults to 22
+remote_path = "/upload/path" # Optional, defaults to /home/username
+
+# Default server selection
+[default]
+server = "server_name"  # Optional, which server to use by default
+````
+
+### Configuration Management
 
 ```bash
-flash --path ~/backup.tar
-# Will prompt for:
-# - Server IP
-# - Username
-# - Password
+# Create initial config file with examples
+flash --init-config
+
+# Use a specific configured server
+flash --path file.txt --server production
+
+# List available options (interactive mode)
+flash --path file.txt
 ```
 
 ## Supported Platforms
@@ -148,11 +243,12 @@ cargo build --release --target x86_64-pc-windows-gnu
 
 ### Project Structure
 
-```
+```text
 flash/
 ├── src/
 │   ├── main.rs      # Entry point and CLI handling
 │   ├── lib.rs       # Library exports
+│   ├── config.rs    # Configuration file handling
 │   ├── compress.rs  # Compression functionality
 │   ├── upload.rs    # SFTP upload functionality
 │   └── input.rs     # User input utilities
@@ -185,6 +281,10 @@ MIT License - see [LICENSE](LICENSE) file for details.
 **Invalid IP address**: Use the format `192.168.1.100` for IPv4 or `::1` for IPv6.
 
 **File not found**: Ensure the path exists and is accessible.
+
+**Server not found**: Check that the server name exists in your config file using `flash --init-config` to create/view the config.
+
+**Config file not found**: Run `flash --init-config` to create an example configuration file, then edit it with your server details.
 
 ### Debug Mode
 
