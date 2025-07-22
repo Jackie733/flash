@@ -4,9 +4,9 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info};
 
-mod compress;
-mod input;
-mod upload;
+use flash::compress;
+use flash::input;
+use flash::upload;
 
 #[derive(Parser, Debug)]
 #[command(version, about = "Toolkit for uploading compressed file/folder.", long_about = None)]
