@@ -3,9 +3,8 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 
 use clap::Parser;
-use flate2::Compression;
-use flate2::write::GzEncoder;
 use walkdir::WalkDir;
+use zip::write::FileOptions;
 
 #[derive(Parser, Debug)]
 #[command(version, about = "Toolkit for uploading compressed file/folder.", long_about = None)]
@@ -15,40 +14,62 @@ struct Args {
     path: String,
 }
 
-fn compress_file(input_path: &str, output_path: &str) -> io::Result<()> {
-    let mut input = File::open(input_path)?;
-    let output = File::create(output_path)?;
-    let mut encoder = GzEncoder::new(output, Compression::default());
+fn compress_file_to_zip(input_path: &str, output_path: &str) -> io::Result<()> {
+    let path = Path::new(input_path);
+    let file = File::create(output_path)?;
+    let mut zip = zip::ZipWriter::new(file);
+
     let mut buffer = Vec::new();
-    input.read_to_end(&mut buffer)?;
-    encoder.write_all(&buffer)?;
+    let mut f = File::open(path)?;
+    f.read_to_end(&mut buffer)?;
+
+    let file_name = path.file_name().unwrap().to_string_lossy();
+    zip.start_file(file_name, FileOptions::default())?;
+    zip.write_all(&buffer)?;
+    zip.finish()?;
+
     Ok(())
 }
 
-fn compress_folder(folder_path: &str, output_dir: &str) -> io::Result<()> {
-    for entry in WalkDir::new(folder_path).into_iter().filter_map(|e| e.ok()) {
+fn compress_folder_to_zip(folder_path: &str, output_zip: &str) -> io::Result<()> {
+    let file = File::create(output_zip)?;
+    let mut zip = zip::ZipWriter::new(file);
+
+    let walkdir = WalkDir::new(folder_path);
+    let folder_path = Path::new(folder_path);
+
+    for entry in walkdir.into_iter().filter_map(|e| e.ok()) {
         let path = entry.path();
+        let name = path.strip_prefix(folder_path).unwrap();
+
         if path.is_file() {
-            let file_name = path.file_name().unwrap().to_string_lossy();
-            let output_path = format!("{}/{}.gz", output_dir, file_name);
-            compress_file(path.to_str().unwrap(), &output_path)?;
+            let mut f = File::open(path)?;
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer)?;
+
+            zip.start_file(name.to_string_lossy(), FileOptions::default())?;
+            zip.write_all(&buffer)?;
+        } else if path.is_dir() {
+            let dir_name = format!("{}/", name.to_string_lossy());
+            zip.add_directory(dir_name, FileOptions::default())?;
         }
     }
+    zip.finish()?;
     Ok(())
 }
 
 fn main() {
     let args = Args::parse();
     let input_path = &args.path;
-    let output_path = format!("{}.gz", input_path);
+    let output_path = format!("{}.zip", input_path);
 
     if Path::new(input_path).is_file() {
-        compress_file(input_path, &output_path).expect("Failed to compress file");
+        compress_file_to_zip(input_path, &output_path).expect("Failed to compress file");
         println!("Compressed file saved to: {}", output_path);
     } else if Path::new(input_path).is_dir() {
         let output_dir = format!("{}.gz", input_path);
         std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-        compress_folder(input_path, &output_dir).expect("Failed to compress folder");
+        compress_folder_to_zip(input_path, &output_dir).expect("Failed to compress folder");
         println!("Compressed folder saved to: {}", output_dir);
     } else {
         println!("Invalid path: {}", input_path);
