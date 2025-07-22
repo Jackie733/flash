@@ -1,7 +1,21 @@
 [package]
 name = "flash"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+authors = ["Jackie Tsien <jackie10673311@gmail.com>"]
+description = "A command-line tool for compressing and uploading files/folders to remote servers via SFTP"
+license = "MIT"
+repository = "https://github.com/Jackie733/flash"
+keywords = ["compression", "upload", "sftp", "cli", "zip"]
+categories = ["command-line-utilities", "network-programming"]
+
+[[bin]]
+name = "flash"
+path = "src/main.rs"
+
+[lib]
+name = "flash"
+path = "src/lib.rs"
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }
