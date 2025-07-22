@@ -1,5 +1,8 @@
 use rpassword::prompt_password;
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    net::IpAddr,
+};
 
 pub fn prompt_string(prompt: &str) -> String {
     print!("{}", prompt);
@@ -11,4 +14,15 @@ pub fn prompt_string(prompt: &str) -> String {
 
 pub fn prompt_secret(prompt: &str) -> String {
     prompt_password(prompt).unwrap()
+}
+
+pub fn prompt_ip_address(prompt: &str) -> String {
+    loop {
+        let input = prompt_string(prompt);
+        if input.parse::<IpAddr>().is_ok() {
+            return input;
+        } else {
+            println!("Invalid IP address format. Please try again.");
+        }
+    }
 }

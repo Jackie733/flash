@@ -1,6 +1,8 @@
 use std::path::Path;
 
+use anyhow::{Context, Result};
 use clap::Parser;
+use log::{error, info};
 
 mod compress;
 mod input;
@@ -19,12 +21,14 @@ struct Args {
     password: Option<String>,
 }
 
-fn main() {
+fn main() -> Result<()> {
+    env_logger::init();
+
     let args = Args::parse();
 
     let ip = args
         .ip
-        .unwrap_or_else(|| input::prompt_string("Server IP: "));
+        .unwrap_or_else(|| input::prompt_ip_address("Server IP: "));
     let port = 22;
     let username = args
         .username
@@ -40,21 +44,34 @@ fn main() {
     );
     let remote_path = format!("/home/{}/{}", username, output_path);
 
+    println!("Start compresssing...");
     if Path::new(input_path).is_file() {
-        compress::compress_file_to_zip(input_path, &output_path).expect("Failed to compress file");
-        println!("Compressed file saved to: {}", output_path);
+        compress::compress_file_to_zip(input_path, &output_path)
+            .with_context(|| format!("Failed to compress file: {}", input_path))?;
+        info!("Compressed file saved to: {}", output_path);
     } else if Path::new(input_path).is_dir() {
         compress::compress_folder_to_zip(input_path, &output_path)
-            .expect("Failed to compress folder");
-        println!("Compressed folder saved to: {}", output_path);
+            .with_context(|| format!("Failed to compress folder: {}", input_path))?;
+        info!("Compressed folder saved to: {}", output_path);
     } else {
-        println!("Invalid path: {}", input_path);
+        error!("Invalid path: {}", input_path);
+        return Err(anyhow::anyhow!("Invalid path: {}", input_path));
     }
 
+    println!("Start uploading...");
     if Path::new(&output_path).exists() {
         upload::upload_via_sftp(&ip, port, &username, &password, &output_path, &remote_path)
-            .expect("Failed to upload file");
+            .with_context(|| {
+                format!("Failed to upload file: {} to {}", output_path, remote_path)
+            })?;
+        info!("File uploaded successfully to ({}) {}", ip, remote_path);
     } else {
-        println!("Local file does not exist: {}", output_path);
+        error!("Local file does not exist: {}", output_path);
+        return Err(anyhow::anyhow!(
+            "Local file does not exist: {}",
+            output_path
+        ));
     }
+
+    Ok(())
 }

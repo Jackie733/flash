@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
 
+use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
 use ssh2::Session;
 
@@ -13,7 +14,7 @@ pub fn upload_via_sftp(
     password: &str,
     local_zip: &str,
     remote_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     let tcp = TcpStream::connect(format!("{}:{}", ip, port))?;
     let mut session = Session::new()?;
     session.set_tcp_stream(tcp);
@@ -21,7 +22,7 @@ pub fn upload_via_sftp(
 
     session.userauth_password(username, password)?;
     if !session.authenticated() {
-        return Err("Authentication failed".into());
+        return Err(anyhow::anyhow!("Authentication failed"));
     }
 
     let sftp = session.sftp()?;
