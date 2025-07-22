@@ -4,8 +4,10 @@ use std::net::TcpStream;
 use std::path::Path;
 
 use clap::Parser;
+use indicatif::{ProgressBar, ProgressStyle};
 use ssh2::Session;
 use walkdir::WalkDir;
+use zip::CompressionMethod;
 use zip::write::FileOptions;
 
 #[derive(Parser, Debug)]
@@ -26,7 +28,10 @@ fn compress_file_to_zip(input_path: &str, output_path: &str) -> io::Result<()> {
     f.read_to_end(&mut buffer)?;
 
     let file_name = path.file_name().unwrap().to_string_lossy();
-    zip.start_file(file_name, FileOptions::default())?;
+    zip.start_file(
+        file_name,
+        FileOptions::default().compression_method(CompressionMethod::Deflated),
+    )?;
     zip.write_all(&buffer)?;
     zip.finish()?;
 
@@ -49,11 +54,17 @@ fn compress_folder_to_zip(folder_path: &str, output_zip: &str) -> io::Result<()>
             let mut buffer = Vec::new();
             f.read_to_end(&mut buffer)?;
 
-            zip.start_file(name.to_string_lossy(), FileOptions::default())?;
+            zip.start_file(
+                name.to_string_lossy(),
+                FileOptions::default().compression_method(CompressionMethod::Deflated),
+            )?;
             zip.write_all(&buffer)?;
         } else if path.is_dir() {
             let dir_name = format!("{}/", name.to_string_lossy());
-            zip.add_directory(dir_name, FileOptions::default())?;
+            zip.add_directory(
+                dir_name,
+                FileOptions::default().compression_method(CompressionMethod::Deflated),
+            )?;
         }
     }
     zip.finish()?;
@@ -75,17 +86,36 @@ fn upload_via_sftp(
     session.handshake()?;
 
     session.userauth_password(username, password)?;
-    assert!(session.authenticated());
+    if !session.authenticated() {
+        return Err("Authentication failed".into());
+    }
 
     let sftp = session.sftp()?;
 
     let mut file = File::open(local_zip)?;
-    let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    let file_size = file.metadata()?.len();
+
+    // progress bar
+    let pb = ProgressBar::new(file_size);
+    pb.set_style(ProgressStyle::default_bar().template(
+        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})"
+    ).unwrap().progress_chars("#>-"));
 
     let mut remote_file = sftp.create(Path::new(remote_path))?;
-    remote_file.write_all(&buffer)?;
+    let mut buffer = [0u8; 8192];
+    let mut total_written = 0u64;
 
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        remote_file.write_all(&buffer[..n])?;
+        total_written += n as u64;
+        pb.set_position(total_written);
+    }
+
+    pb.finish_with_message("Upload complete");
     println!("File uploaded successfully to ({}) {}", ip, remote_path);
     Ok(())
 }
@@ -93,7 +123,10 @@ fn upload_via_sftp(
 fn main() {
     let args = Args::parse();
     let input_path = &args.path;
-    let output_path = format!("{}.zip", input_path);
+    let output_path = format!(
+        "{}.zip",
+        Path::new(input_path).file_name().unwrap().to_string_lossy()
+    );
 
     let ip = "192.168.1.109";
     let port = 22;
@@ -105,10 +138,8 @@ fn main() {
         compress_file_to_zip(input_path, &output_path).expect("Failed to compress file");
         println!("Compressed file saved to: {}", output_path);
     } else if Path::new(input_path).is_dir() {
-        let output_dir = format!("{}.zip", input_path);
-        std::fs::create_dir_all(&output_dir).expect("Failed to create output directory");
-        compress_folder_to_zip(input_path, &output_dir).expect("Failed to compress folder");
-        println!("Compressed folder saved to: {}", output_dir);
+        compress_folder_to_zip(input_path, &output_path).expect("Failed to compress folder");
+        println!("Compressed folder saved to: {}", output_path);
     } else {
         println!("Invalid path: {}", input_path);
     }
