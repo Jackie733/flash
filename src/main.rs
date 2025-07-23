@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use log::{error, info, warn};
 
-use flash::compress;
+use flash::compress::{self, CompressionFormat};
 use flash::config::Config;
 use flash::input;
 use flash::loading::LoadingSpinner;
@@ -16,16 +16,31 @@ use flash::upload;
 struct Args {
     #[arg(short, long, required_unless_present = "init_config")]
     path: Option<String>,
+
+    #[arg(
+        short,
+        long,
+        value_enum,
+        default_value = "zip",
+        help = "Compression format: zip, tar, tar-gz"
+    )]
+    format: Option<CompressionFormat>,
+
     #[arg(long)]
     ip: Option<String>,
+
     #[arg(long)]
     port: Option<u16>,
+
     #[arg(long)]
     username: Option<String>,
+
     #[arg(long)]
     password: Option<String>,
+
     #[arg(long)]
     server: Option<String>,
+
     #[arg(long, action)]
     init_config: bool,
 }
@@ -115,35 +130,28 @@ fn main() -> Result<()> {
         }
     };
 
+    let format = args.format.unwrap_or_default();
+
     let output_path = format!(
-        "{}.zip",
+        "{}.{}",
         Path::new(&input_path)
             .file_name()
             .unwrap()
-            .to_string_lossy()
+            .to_string_lossy(),
+        format.extension()
     );
     let remote_path = format!("{}/{}", remote_path_template, output_path);
 
     let compress_spinner = LoadingSpinner::new("Starting compression...");
-    if Path::new(&input_path).is_file() {
-        compress_spinner.update_message("Compressing file...");
-        if let Err(e) = compress::compress_file_to_zip(&input_path, &output_path)
-            .with_context(|| format!("Failed to compress file: {}", input_path))
-        {
-            compress_spinner.finish_with_error("Compression failed");
-            return Err(e);
-        }
-    } else if Path::new(&input_path).is_dir() {
-        compress_spinner.update_message("Compressing folder...");
-        if let Err(e) = compress::compress_folder_to_zip(&input_path, &output_path)
-            .with_context(|| format!("Failed to compress folder: {}", input_path))
-        {
-            compress_spinner.finish_with_error("Compression failed");
-            return Err(e);
-        }
-    } else {
-        compress_spinner.finish_with_error("Invalid path");
-        return Err(anyhow::anyhow!("Invalid path: {}", input_path));
+    compress_spinner.update_message(&format!(
+        "Compressing with {} format...",
+        format.description()
+    ));
+    if let Err(e) = compress::compress(&input_path, &output_path, format)
+        .with_context(|| format!("Failed to compress {}: {}", input_path, output_path))
+    {
+        compress_spinner.finish_with_error("Compression failed");
+        return Err(e);
     }
     compress_spinner.finish_with_success("Compressed successfully");
 
@@ -161,7 +169,6 @@ fn main() -> Result<()> {
             max_retries,
         )
         .with_context(|| format!("Failed to upload file: {} to {}", output_path, remote_path))?;
-        println!("✅ File uploaded successfully to ({}) {}", ip, remote_path);
     } else {
         upload_spinner.finish_with_error("Local file does not exist");
         return Err(anyhow::anyhow!(

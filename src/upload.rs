@@ -145,7 +145,7 @@ pub fn upload_via_sftp(
     }
 
     pb.finish_with_message("Upload complete");
-    println!("File uploaded successfully to ({}) {}", ip, remote_path);
+    println!("✅ File uploaded successfully to ({}) {}", ip, remote_path);
     Ok(())
 }
 
