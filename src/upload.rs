@@ -10,6 +10,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 use sha2::{Digest, Sha256};
 use ssh2::{OpenFlags, Session};
 
+use crate::loading::LoadingSpinner;
+
 fn calc_file_sha256(path: &str) -> anyhow::Result<String> {
     let mut file = File::open(path)?;
     let mut hasher = Sha256::new();
@@ -46,31 +48,40 @@ pub fn upload_via_sftp(
     local_zip: &str,
     remote_path: &str,
 ) -> Result<()> {
+    let loading = LoadingSpinner::new("Connecting to SFTP server...");
+
     let tcp = TcpStream::connect(format!("{}:{}", ip, port))?;
     let mut session = Session::new()?;
     session.set_tcp_stream(tcp);
     session.handshake()?;
 
+    loading.update_message("Authenticating...");
     session.userauth_password(username, password)?;
     if !session.authenticated() {
+        loading.finish_with_error("Authentication failed");
         return Err(anyhow::anyhow!("Authentication failed"));
     }
 
+    loading.update_message("Checking remote directory...");
     let sftp = session.sftp()?;
     let remote_file_path = Path::new(remote_path);
 
     // Ensure remote directory exists
     if let Some(parent_dir) = remote_file_path.parent() {
         if let Err(_) = sftp.stat(parent_dir) {
-            println!("Creating remote directory: {:?}", parent_dir);
+            loading.update_message("Creating remote directory...");
             sftp.mkdir(parent_dir, 0o755)?;
         }
     }
 
+    loading.update_message("Analyzing files...");
     let remote_size = match sftp.stat(remote_file_path) {
         Ok(stat) => stat.size.unwrap_or(0),
         Err(_) => 0, // If the file doesn't exist, start from 0
     };
+
+    // Finish the loading spinner before starting the upload progress bar
+    loading.finish_with_success("Ready to upload");
 
     let mut file = File::open(local_zip)?;
     let file_size = file.metadata()?.len();
@@ -152,11 +163,12 @@ pub fn upload_via_sftp_with_retry(
         match upload_via_sftp(ip, port, username, password, local_zip, remote_path) {
             Ok(()) => return Ok(()),
             Err(e) => {
-                eprintln!("Attempt {} failed: {}", attempt, e);
+                eprintln!("❌ Attempt {} failed: {}", attempt, e);
                 last_err = Some(e);
                 if attempt < max_retries {
-                    eprintln!("Retrying after 2 seconds...");
+                    let retry_spinner = LoadingSpinner::new("Retrying in 2 seconds...");
                     thread::sleep(Duration::from_secs(2));
+                    retry_spinner.finish_and_clear();
                 }
             }
         }
