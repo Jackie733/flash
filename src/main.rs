@@ -138,11 +138,18 @@ fn main() -> Result<()> {
     }
 
     println!("Start uploading...");
+    let max_retries = 3;
     if Path::new(&output_path).exists() {
-        upload::upload_via_sftp(&ip, port, &username, &password, &output_path, &remote_path)
-            .with_context(|| {
-                format!("Failed to upload file: {} to {}", output_path, remote_path)
-            })?;
+        upload::upload_via_sftp_with_retry(
+            &ip,
+            port,
+            &username,
+            &password,
+            &output_path,
+            &remote_path,
+            max_retries,
+        )
+        .with_context(|| format!("Failed to upload file: {} to {}", output_path, remote_path))?;
         info!("File uploaded successfully to ({}) {}", ip, remote_path);
     } else {
         error!("Local file does not exist: {}", output_path);

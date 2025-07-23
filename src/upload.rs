@@ -2,6 +2,8 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -53,4 +55,34 @@ pub fn upload_via_sftp(
     pb.finish_with_message("Upload complete");
     println!("File uploaded successfully to ({}) {}", ip, remote_path);
     Ok(())
+}
+
+pub fn upload_via_sftp_with_retry(
+    ip: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+    local_zip: &str,
+    remote_path: &str,
+    max_retries: u32,
+) -> anyhow::Result<()> {
+    let mut last_err = None;
+    for attempt in 1..=max_retries {
+        match upload_via_sftp(ip, port, username, password, local_zip, remote_path) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                eprintln!("Attempt {} failed: {}", attempt, e);
+                last_err = Some(e);
+                if attempt < max_retries {
+                    eprintln!("Retrying after 2 seconds...");
+                    thread::sleep(Duration::from_secs(2));
+                }
+            }
+        }
+    }
+    Err(anyhow::anyhow!(
+        "Failed to upload after {} attempts: {}",
+        max_retries,
+        last_err.unwrap()
+    ))
 }
