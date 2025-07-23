@@ -1,6 +1,6 @@
 [package]
 name = "flash"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Jackie Tsien <jackie10673311@gmail.com>"]
 description = "A command-line tool for compressing and uploading files/folders to remote servers via SFTP"

@@ -27,26 +27,33 @@ for binary in releases/flash-*; do
         # Extract target from filename
         target=$(basename "$binary" | sed 's/flash-//' | sed 's/\.exe$//')
         
+        # Clean up target name for better readability
+        clean_target="$target"
+        clean_target="${clean_target/x86_64-unknown-linux-gnu/linux-x64}"
+        clean_target="${clean_target/x86_64-apple-darwin/macos-x64}"
+        clean_target="${clean_target/aarch64-apple-darwin/macos-arm64}"
+        clean_target="${clean_target/x86_64-pc-windows-gnu/windows-x64}"
+        
         # Create directory for this target
-        mkdir -p "dist/flash-v$VERSION-$target"
+        mkdir -p "dist/flash-v$VERSION-$clean_target"
         
         # Copy binary
-        cp "$binary" "dist/flash-v$VERSION-$target/"
+        cp "$binary" "dist/flash-v$VERSION-$clean_target/"
         
         # Copy documentation
-        cp README.md "dist/flash-v$VERSION-$target/"
-        cp LICENSE "dist/flash-v$VERSION-$target/" 2>/dev/null || echo "LICENSE file not found, skipping..."
+        cp README.md "dist/flash-v$VERSION-$clean_target/"
+        cp LICENSE "dist/flash-v$VERSION-$clean_target/" 2>/dev/null || echo "LICENSE file not found, skipping..."
         
         # Create archive
         cd dist
         if [[ "$target" == *"windows"* ]]; then
-            zip -r "flash-v$VERSION-$target.zip" "flash-v$VERSION-$target"
+            zip -r "flash-v$VERSION-$clean_target.zip" "flash-v$VERSION-$clean_target"
         else
-            tar -czf "flash-v$VERSION-$target.tar.gz" "flash-v$VERSION-$target"
+            tar -czf "flash-v$VERSION-$clean_target.tar.gz" "flash-v$VERSION-$clean_target"
         fi
         cd ..
         
-        echo "✅ Created archive for $target"
+        echo "✅ Created archive for $clean_target (from $target)"
     fi
 done
 
