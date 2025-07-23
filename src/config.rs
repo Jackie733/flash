@@ -8,6 +8,7 @@ pub struct ServerConfig {
     pub name: String,
     pub ip: String,
     pub username: String,
+    pub password: Option<String>,
     pub port: Option<u16>,
     pub remote_path: Option<String>,
 }
@@ -53,6 +54,7 @@ impl Config {
 name = "Home Server"
 ip = "192.168.1.100"
 username = "admin"
+password = "123"
 port = 22
 remote_path = "/home/admin"
 

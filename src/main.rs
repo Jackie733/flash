@@ -18,6 +18,8 @@ struct Args {
     #[arg(long)]
     ip: Option<String>,
     #[arg(long)]
+    port: Option<u16>,
+    #[arg(long)]
     username: Option<String>,
     #[arg(long)]
     password: Option<String>,
@@ -45,60 +47,65 @@ fn main() -> Result<()> {
         None
     });
 
-    let (ip, username, port, remote_path_template) = if let Some(server_name) = &args.server {
-        match &config {
-            Some(cfg) => {
-                if let Some(server) = cfg.servers.get(server_name) {
-                    info!("Using configured server: {}", server.name);
-                    (
-                        server.ip.clone(),
-                        server.username.clone(),
-                        server.port.unwrap_or(22),
-                        server
-                            .remote_path
-                            .clone()
-                            .unwrap_or_else(|| format!("/home/{}", server.username)),
-                    )
-                } else {
-                    error!("Server '{}' not found in config.", server_name);
-                    return Err(anyhow::anyhow!(
-                        "Server '{}' not found in config.",
-                        server_name
-                    ));
+    let (ip, username, mut password, port, remote_path_template) =
+        if let Some(server_name) = &args.server {
+            match &config {
+                Some(cfg) => {
+                    if let Some(server) = cfg.servers.get(server_name) {
+                        info!("Using configured server: {}", server.name);
+                        (
+                            server.ip.clone(),
+                            server.username.clone(),
+                            server.password.clone().unwrap_or_default(),
+                            server.port.unwrap_or(22),
+                            server
+                                .remote_path
+                                .clone()
+                                .unwrap_or_else(|| format!("/home/{}", server.username)),
+                        )
+                    } else {
+                        error!("Server '{}' not found in config.", server_name);
+                        return Err(anyhow::anyhow!(
+                            "Server '{}' not found in config.",
+                            server_name
+                        ));
+                    }
+                }
+                None => {
+                    error!("No configuration loaded. Use --init-config to create one.");
+                    return Err(anyhow::anyhow!("No configuration loaded."));
                 }
             }
-            None => {
-                error!("No configuration loaded. Use --init-config to create one.");
-                return Err(anyhow::anyhow!("No configuration loaded."));
-            }
-        }
-    } else if let Some(configured_server) = input::get_server_config(config) {
-        let username = configured_server.username.clone();
-        let remote_path = configured_server
-            .remote_path
-            .unwrap_or_else(|| format!("/home/{}", username));
-        (
-            configured_server.ip,
-            username,
-            configured_server.port.unwrap_or(22),
-            remote_path,
-        )
-    } else {
-        let ip = args
-            .ip
-            .unwrap_or_else(|| input::prompt_ip_address("Server IP: "));
-        let username = args
-            .username
-            .unwrap_or_else(|| input::prompt_string("Username: "));
-        let remote_path = format!("/home/{}", username);
-        (ip, username, 22, remote_path)
-    };
+        } else if let Some(configured_server) = input::get_server_config(config) {
+            let username = configured_server.username.clone();
+            let remote_path = configured_server
+                .remote_path
+                .unwrap_or_else(|| format!("/home/{}", username));
+            (
+                configured_server.ip,
+                username,
+                configured_server.password.unwrap_or_default(),
+                configured_server.port.unwrap_or(22),
+                remote_path,
+            )
+        } else {
+            let ip = args
+                .ip
+                .unwrap_or_else(|| input::prompt_ip_address("Server IP: "));
+            let username = args
+                .username
+                .unwrap_or_else(|| input::prompt_string("Username: "));
+            let password = args
+                .password
+                .unwrap_or_else(|| input::prompt_secret("Password: "));
+            let remote_path = format!("/home/{}", username);
+            (ip, username, password, 22, remote_path)
+        };
 
-    let password = args
-        .password
-        .unwrap_or_else(|| input::prompt_secret("Password: "));
+    if password.is_empty() {
+        password = input::prompt_secret("Password: ");
+    }
 
-    // 获取输入路径
     let input_path = match args.path {
         Some(path) => path,
         None => {

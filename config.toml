@@ -2,6 +2,7 @@
 name = "Example Server"
 ip = "192.168.1.100"
 username = "example"
+password = '123'
 port = 22
 remote_path = "/home/example/uploads"
 
